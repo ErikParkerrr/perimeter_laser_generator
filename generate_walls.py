@@ -57,32 +57,40 @@ def order_lines(lines, points):
 
     logging.debug(f"Starting ordering with line: {current_line}")
 
-    iteration = 0
     while len(ordered_lines) < len(lines):
-        iteration += 1
-        _, nearest_idx = tree.query([(current_line[1].x, current_line[1].y, current_line[1].z)], k=2)
-
-        logging.debug(f"Iteration {iteration}: Nearest indices {nearest_idx[0]} for point ({current_line[1].x}, {current_line[1].y}, {current_line[1].z})")
+        current_end = current_line[1]  # End of the current line
+        nearest_dist, nearest_indices = tree.query([(current_end.x, current_end.y, current_end.z)], k=min(10, len(points)))
 
         found_next = False
-        for idx in nearest_idx[0]:
-            if idx < len(points):  # Ensure the index is valid
-                candidate_idx = idx // 2
+        for idx in nearest_indices[0]:
+            candidate_idx = idx // 2
+            if candidate_idx < len(lines):
                 candidate = lines[candidate_idx]
-
                 if candidate not in visited:
                     ordered_lines.append(candidate)
                     visited.add(candidate)
                     current_line = candidate
                     found_next = True
-                    break  # Move to the next closest line
-        
+                    break
+
         if not found_next:
-            logging.warning("Stuck in ordering loop, breaking out to avoid infinite loop.")
-            break  # Avoid infinite loop
+            logging.warning("No connected unvisited lines. Jumping to the next closest unvisited line.")
+
+            # Find the next closest unvisited line by direct distance computation
+            remaining_lines = [line for line in lines if line not in visited]
+            if not remaining_lines:
+                break
+
+            current_line = min(remaining_lines, key=lambda line: min(
+                line_length(current_line[1], line[0]), 
+                line_length(current_line[1], line[1])
+            ))
+            ordered_lines.append(current_line)
+            visited.add(current_line)
 
     logging.info(f"Ordered {len(ordered_lines)} lines out of {len(lines)} total.")
     return ordered_lines
+
 
 def write_ordered_lines(ordered_lines, output_file):
     """Writes the ordered line lengths to a text file."""
